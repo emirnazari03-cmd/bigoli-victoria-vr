@@ -1,0 +1,199 @@
+<title>Bigoli Victoria Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Archivo:wght@400;500;600&display=swap">
+<style>
+  /* Layout: full-bleed 3D stage. Controls top-left, option brief + review views
+     top-right, guided walkthrough bottom-centre, minimap bottom-right,
+     inspect card bottom-left. One committed light look in Bigoli colours. */
+  :root {
+    --red: #cc1305;
+    --green: #376a4a;
+    --paper: #f5f2e9;
+    --paper-2: #e2ddc9;
+    --ink: #1b1d1c;
+    --muted: #5b605c;
+    --line: rgba(27, 29, 28, 0.13);
+    --display: 'Oswald', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+    --body: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    color-scheme: light;
+  }
+  html, body { height: 100%; }
+  body { background: #cfd6d9; color: var(--ink); font: 14px/1.45 var(--body); overflow: hidden; }
+  #app { position: relative; height: 100%; }
+  #stage { position: absolute; inset: 0; }
+  #stage canvas { display: block; }
+  .labels { position: absolute; inset: 0; touch-action: none; cursor: grab; }
+  body:not([data-mode="walk"]) .labels { cursor: crosshair; }
+  .walkhint { position: absolute; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top, 0px)); margin: 0; background: var(--ink); color: #fff; font: 500 12.5px/1.2 var(--body); padding: 8px 12px; border-radius: 999px; pointer-events: none; display: none; }
+  body[data-mode="plan"] .walkhint, body[data-mode="orbit"] .walkhint { display: block; }
+  @media (max-width: 1100px) { .walkhint { top: auto; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); } }
+  .labels > div { pointer-events: none; }
+
+  .badge { display: flex; align-items: center; gap: 6px; background: rgba(245,242,233,.94); color: var(--ink); border-radius: 999px; padding: 3px 10px 3px 3px; font: 600 11.5px/1 var(--body); box-shadow: 0 2px 10px rgba(0,0,0,.2); white-space: nowrap; }
+  .badge b { display: grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; background: var(--red); color: #fff; font: 600 11px/1 var(--display); }
+  .zone { font: 600 10.5px/1 var(--display); letter-spacing: .14em; color: var(--ink); background: rgba(245,242,233,.86); padding: 3px 6px; border-radius: 3px; white-space: nowrap; }
+
+  .panel { position: absolute; background: var(--paper); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
+  .top { top: calc(12px + env(safe-area-inset-top, 0px)); left: 12px; padding: 12px 14px; display: grid; gap: 9px; max-width: calc(100% - 24px); }
+  .brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .brand h1 { margin: 0; font: 600 20px/1 var(--display); letter-spacing: .05em; color: var(--red); text-transform: uppercase; }
+  .brand span { font-size: 12px; color: var(--muted); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .lbl { width: 46px; font: 500 10px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: #fff; }
+  button { font: 500 13px/1 var(--body); color: var(--ink); background: transparent; border: 0; padding: 8px 11px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .seg.opt button[aria-pressed="true"] { background: var(--red); }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-size: 12px; background: #fff; }
+  .chip.vr { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
+  .chip[aria-pressed="true"] { background: var(--green); border-color: var(--green); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
+  .brief { top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; width: 318px; }
+  .brief summary { list-style: none; cursor: pointer; padding: 12px 14px; font: 600 12.5px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; display: flex; justify-content: space-between; }
+  .brief summary::-webkit-details-marker { display: none; }
+  .brief summary::after { content: '+'; color: var(--red); }
+  .brief[open] summary::after { content: '–'; }
+  .brief .body { padding: 0 14px 12px; display: grid; gap: 9px; overflow: auto; max-height: calc(100dvh - 300px); }
+  .brief p { margin: 0; }
+  .journey { font-size: 12.5px; color: var(--ink); background: var(--paper-2); border-radius: 6px; padding: 7px 9px; }
+  .kv { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: 8px; font-variant-numeric: tabular-nums; }
+  .kv b { font: 600 20px/1 var(--display); color: var(--red); }
+  .h { font: 500 10px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+  #stops { display: grid; gap: 1px; }
+  #stops button { text-align: left; padding: 6px 6px; border-radius: 5px; font-size: 12.5px; display: flex; gap: 8px; }
+  #stops button i { font: 500 11px/1.3 var(--display); color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
+  #stops button:hover { background: var(--paper-2); }
+  #stops button[aria-current="true"] { background: var(--ink); color: #fff; }
+  #stops button[aria-current="true"] i { color: #fff; }
+  .legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 18px; height: 3px; background: var(--red); vertical-align: middle; margin-right: 5px; }
+  .legend i.c { background: repeating-linear-gradient(90deg, var(--green) 0 5px, transparent 5px 8px); }
+  .legend i.s { background: repeating-linear-gradient(90deg, #8a8f94 0 5px, transparent 5px 8px); }
+  .legend i.d { background: repeating-linear-gradient(90deg, #2b5fa8 0 5px, transparent 5px 8px); }
+  .note { font-size: 11.5px; color: var(--muted); }
+
+  .tour { left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: min(640px, calc(100% - 24px - 520px)); min-width: 360px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px; padding: 8px; }
+  .tour .txt { min-width: 0; padding: 2px 8px; }
+  .tour .meta { display: flex; gap: 8px; align-items: center; }
+  .tour .meta span:first-child { font: 600 11px/1 var(--display); letter-spacing: .12em; color: var(--red); font-variant-numeric: tabular-nums; }
+  .tour h2 { margin: 3px 0 2px; font: 600 17px/1.15 var(--display); letter-spacing: .03em; text-transform: uppercase; text-wrap: balance; }
+  .tour p { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .staff { font: 500 9.5px/1 var(--display); letter-spacing: .14em; background: var(--green); color: #fff; padding: 3px 6px; border-radius: 3px; }
+  .nav { width: 44px; height: 52px; border-radius: 8px; background: var(--red); color: #fff; font: 500 22px/1 var(--display); }
+
+  #minimap { position: absolute; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: 240px; height: 180px; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.18); cursor: crosshair; background: #f7f5ee; }
+  .inspect { left: 12px; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); width: 250px; padding: 11px 13px; display: grid; gap: 4px; }
+  .inspect h3 { margin: 0; font: 600 14px/1.2 var(--display); letter-spacing: .03em; text-transform: uppercase; padding-right: 20px; }
+  .inspect p { margin: 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .inspect .x { position: absolute; top: 6px; right: 6px; padding: 4px 8px; font-size: 16px; color: var(--muted); }
+  .hint { position: absolute; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); margin: 0; max-width: 250px; font-size: 11.5px; color: var(--ink); background: rgba(245,242,233,.9); padding: 7px 10px; border-radius: 8px; }
+  .hint kbd { font: 600 10.5px/1 var(--body); border: 1px solid var(--line); border-radius: 3px; padding: 1px 4px; background: #fff; }
+  .pad { position: absolute; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); display: none; grid-template-columns: repeat(6, 44px); gap: 4px; }
+  .pad button { width: 44px; height: 44px; border-radius: 8px; background: rgba(245,242,233,.94); font: 500 16px/1 var(--display); box-shadow: 0 2px 8px rgba(0,0,0,.15); touch-action: none; }
+
+  @media (max-width: 1100px) {
+    .tour { left: 12px; transform: none; width: calc(100% - 24px - 252px); min-width: 0; }
+    .hint { display: none; }
+    .inspect { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  }
+  @media (max-width: 760px) {
+    .top { padding: 10px; }
+    .brief { top: auto; bottom: calc(262px + env(safe-area-inset-bottom, 0px)); left: 12px; right: auto; width: min(318px, calc(100% - 24px)); }
+    .brief .body { max-height: 30dvh; }
+    .brief:not([open]) { width: auto; }
+    .tour { width: calc(100% - 24px); bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+    #minimap { width: 140px; height: 105px; bottom: calc(156px + env(safe-area-inset-bottom, 0px)); }
+    .pad { display: grid; }
+    .inspect { bottom: calc(262px + env(safe-area-inset-bottom, 0px)); }
+  }
+  @media (hover: none) { .hint { display: none; } .pad { display: grid; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="app">
+  <div id="stage"></div>
+
+  <section class="panel top" aria-label="View controls">
+    <div class="brand"><h1>Bigoli Victoria</h1><span>Ground floor · Phase 1 design-review model</span></div>
+    <div class="row">
+      <span class="lbl">Layout</span>
+      <div class="seg opt" role="group" aria-label="Layout option">
+        <button id="opt-a" data-option="A" aria-pressed="true">A · kitchen left</button>
+        <button id="opt-b" data-option="B" aria-pressed="false">B · kitchen right</button>
+        <button id="opt-b2" data-option="B2" aria-pressed="false">B2 · revised</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="lbl">View</span>
+      <div class="seg" role="group" aria-label="View mode">
+        <button id="mode-walk" data-mode="walk" aria-pressed="true">Walk</button>
+        <button id="mode-orbit" data-mode="orbit" aria-pressed="false">3D overview</button>
+        <button id="mode-plan" data-mode="plan" aria-pressed="false">Plan</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="lbl">Show</span>
+      <button class="chip" id="tg-labels" data-toggle="labels" aria-pressed="true">Labels</button>
+      <button class="chip" id="tg-flow" data-toggle="flow" aria-pressed="false">Flow lines</button>
+      <button class="chip" id="tg-ceiling" data-toggle="ceiling" aria-pressed="true">Ceiling</button>
+      <button class="chip" id="tg-night" data-toggle="night" aria-pressed="false">Night</button>
+      <button class="chip" id="tg-hq" data-toggle="hq" aria-pressed="true">High quality</button>
+      <button class="chip vr" id="tg-vr" hidden>Enter VR</button>
+      <button class="chip" id="tg-free" data-toggle="free" aria-pressed="false" title="Walk through counters and equipment to check behind them">Walk through objects</button>
+    </div>
+  </section>
+
+  <details class="panel brief" id="brief" open>
+    <summary>Option brief</summary>
+    <div class="body">
+      <p id="opt-summary"></p>
+      <p class="journey" id="opt-journey"></p>
+      <div class="kv"><span>Covers in this layout</span><b id="opt-seats">16</b></div>
+      <div class="legend"><span><i></i>Food flow</span><span><i class="c"></i>Customer route</span><span><i class="d"></i>Delivery rider</span><span><i class="s"></i>Staff (B2)</span></div>
+      <p class="h">Review views</p>
+      <div id="stops" role="list"></div>
+      <p class="note">Existing geometry is digitised from survey 0385-SY-01 (1:50, ±50&nbsp;mm). Equipment is modelled to real commercial kit classes and will be swapped for your chosen models. Click any object to see its size and position.</p>
+    </div>
+  </details>
+
+  <section class="panel tour" aria-label="Guided walkthrough" aria-live="polite">
+    <button class="nav" id="tour-prev" aria-label="Previous view">‹</button>
+    <div class="txt">
+      <div class="meta"><span id="tour-step">01 / 19</span><span class="staff" id="tour-staff" hidden>STAFF VIEW</span></div>
+      <h2 id="tour-title">Victoria Street</h2>
+      <p id="tour-desc">The two shopfronts.</p>
+    </div>
+    <button class="nav" id="tour-next" aria-label="Next view">›</button>
+  </section>
+
+  <section class="panel inspect" id="inspect" hidden aria-live="polite">
+    <button class="x" id="inspect-close" aria-label="Close">×</button>
+    <h3 id="inspect-name"></h3>
+    <p id="inspect-dims"></p>
+    <p id="inspect-pos"></p>
+    <p id="inspect-key"></p>
+  </section>
+
+  <p class="walkhint">Click anywhere on the floor to walk in there</p>
+  <canvas id="minimap" aria-label="Minimap. Click to jump to a spot."></canvas>
+  <p class="hint">Drag to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Q</kbd><kbd>E</kbd> turn · <kbd>N</kbd>/<kbd>P</kbd> next/prev view · <kbd>Shift</kbd> run · click an object to inspect it · click the minimap, or anywhere in Plan / 3D overview, to walk in there</p>
+  <div class="pad" aria-label="Movement controls">
+    <button data-pad="turnl" aria-label="Turn left">⟲</button>
+    <button data-pad="left" aria-label="Step left">◀</button>
+    <button data-pad="fwd" aria-label="Walk forward">▲</button>
+    <button data-pad="back" aria-label="Walk back">▼</button>
+    <button data-pad="right" aria-label="Step right">▶</button>
+    <button data-pad="turnr" aria-label="Turn right">⟳</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="js/app.js"></script>
