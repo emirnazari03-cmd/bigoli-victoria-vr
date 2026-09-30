@@ -822,15 +822,24 @@ renderer.xr.addEventListener('sessionend', () => {
   document.body.dataset.xr = ''; applyWalkCamera(); resize();
 });
 const vrBtn = document.getElementById('tg-vr');
+// The button is always visible; if this browser can't do VR it explains where to open it.
+const VR_LINK = 'https://emirnazari03-cmd.github.io/bigoli-victoria-vr/#B2';
 async function initVR() {
-  if (!navigator.xr || !(await navigator.xr.isSessionSupported('immersive-vr').catch(() => false))) return;
-  vrBtn.hidden = false;
+  const note = document.getElementById('vr-note');
+  const say = (html) => { note.innerHTML = html; note.hidden = false; setTimeout(() => { note.hidden = true; }, 9000); };
+  const supported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr').catch(() => false);
+  const framed = window.top !== window.self;
   vrBtn.addEventListener('click', async () => {
     if (renderer.xr.isPresenting) { renderer.xr.getSession().end(); return; }
+    if (!supported) {
+      say(framed ? `VR can't start inside this page. In the Meta Quest Browser open:<br><b>${VR_LINK}</b>`
+                 : `This browser has no VR headset. Open this link in the <b>Meta Quest Browser</b> (inside the headset):<br><b>${VR_LINK}</b>`);
+      return;
+    }
     try {
       const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor'] });
       await renderer.xr.setSession(session);
-    } catch (e) { vrBtn.textContent = 'VR blocked here: open the VR link'; console.warn(e); }
+    } catch (e) { say(`VR was blocked (${e.name}). Open in the Meta Quest Browser:<br><b>${VR_LINK}</b>`); console.warn(e); }
   });
 }
 initVR();

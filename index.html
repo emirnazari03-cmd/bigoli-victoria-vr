@@ -1,3 +1,5 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Bigoli Victoria Walkthrough</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,6 +49,10 @@
   button[aria-pressed="true"] { background: var(--ink); color: #fff; }
   .seg.opt button[aria-pressed="true"] { background: var(--red); }
   .chip { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-size: 12px; background: #fff; }
+  .vrbig { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 5; background: var(--red); color: #fff; font: 600 20px/1 var(--display); letter-spacing: .08em; padding: 16px 28px; border-radius: 999px; box-shadow: 0 8px 26px rgba(0,0,0,.3); }
+  .vrnote { position: absolute; top: calc(70px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 5; margin: 0; max-width: min(420px, calc(100% - 24px)); background: var(--ink); color: #fff; font-size: 13px; padding: 9px 13px; border-radius: 8px; text-align: center; }
+  body[data-mode="plan"] .walkhint, body[data-mode="orbit"] .walkhint { top: calc(74px + env(safe-area-inset-top, 0px)); }
+  @media (max-width: 1100px) { .vrbig { top: auto; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); font-size: 16px; padding: 12px 20px; } .vrnote { top: auto; bottom: calc(200px + env(safe-area-inset-bottom, 0px)); } }
   .chip.vr { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
   .chip[aria-pressed="true"] { background: var(--green); border-color: var(--green); color: #fff; }
   button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
@@ -141,7 +147,6 @@
       <button class="chip" id="tg-ceiling" data-toggle="ceiling" aria-pressed="true">Ceiling</button>
       <button class="chip" id="tg-night" data-toggle="night" aria-pressed="false">Night</button>
       <button class="chip" id="tg-hq" data-toggle="hq" aria-pressed="true">High quality</button>
-      <button class="chip vr" id="tg-vr" hidden>Enter VR</button>
       <button class="chip" id="tg-free" data-toggle="free" aria-pressed="false" title="Walk through counters and equipment to check behind them">Walk through objects</button>
     </div>
   </section>
@@ -177,6 +182,8 @@
     <p id="inspect-key"></p>
   </section>
 
+  <button id="tg-vr" class="vrbig" type="button">🥽 ENTER VR</button>
+  <p id="vr-note" class="vrnote" hidden></p>
   <p class="walkhint">Click anywhere on the floor to walk in there</p>
   <canvas id="minimap" aria-label="Minimap. Click to jump to a spot."></canvas>
   <p class="hint">Drag to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Q</kbd><kbd>E</kbd> turn · <kbd>N</kbd>/<kbd>P</kbd> next/prev view · <kbd>Shift</kbd> run · click an object to inspect it · click the minimap, or anywhere in Plan / 3D overview, to walk in there</p>
