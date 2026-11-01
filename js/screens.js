@@ -15,7 +15,7 @@ function canvasTexture(w, h, draw) {
     g.globalAlpha = 1; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.clearRect(0, 0, w, h);
     draw(g, w, h); t.needsUpdate = true;
   };
-  paint();
+  paint(); t.userData.repaint = paint;
   if (document.fonts) document.fonts.load(`600 40px Oswald`).then(paint).catch(() => {});
   return t;
 }
@@ -28,11 +28,12 @@ export function screenMaterial(map, intensity = 1.0) {
 export function buildSignage(loadTex) {
   const menus = ['menu_1.jpg', 'menu_2.jpg', 'menu_3.jpg', 'menu_4.jpg', 'menu_shapes.jpg'].map(f => loadTex('textures/' + f));
   const logo = new Image(); logo.src = 'textures/logo_red.jpg';
+  const wordmark = new Image(); wordmark.src = 'textures/wordmark.jpg';   // full BIGOLI · FRESH PASTA lockup
 
   const orderStatus = canvasTexture(1920, 1080, (g, w, h) => {
     g.fillStyle = '#101214'; g.fillRect(0, 0, w, h);
     g.fillStyle = RED; g.fillRect(0, 0, w, 150);
-    if (logo.complete && logo.naturalWidth) g.drawImage(logo, 90, 220, 380, 150, 40, 18, 290, 115);
+    if (wordmark.complete && wordmark.naturalWidth) g.drawImage(wordmark, 0, 0, 512, 225, 40, 12, 287, 126);   // whole wordmark, nothing cropped
     g.fillStyle = '#fff'; g.font = `600 64px ${FONT}`; g.textBaseline = 'middle';
     g.fillText('ORDER STATUS', 380, 78);
     g.font = `500 38px ${FONT}`; g.textAlign = 'right'; g.fillText('12:41', w - 50, 78); g.textAlign = 'left';
@@ -52,6 +53,7 @@ export function buildSignage(loadTex) {
     col(100 + colW, 'READY FOR COLLECTION', GREEN, '#ffffff', ['07', '03'], 'READY FOR COLLECTION', true);
     g.fillStyle = '#8b9096'; g.font = `400 28px ${FONT}`; g.fillText('Straight up. Fresh pasta. Made with flavour. Always.', 50, h - 24);
   });
+  wordmark.addEventListener('load', () => orderStatus.userData.repaint());
 
   const lightbox = (text, bg, fg, w = 1200, h = 300, sub) => canvasTexture(w, h, (g) => {
     g.fillStyle = bg; g.fillRect(0, 0, w, h);

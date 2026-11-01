@@ -453,8 +453,9 @@ function kioskLow(g, w, d) {
   rb(g, 0, 0, w, d, 0, 0.02, dark, 0.008);
   [-0.2, 0.2].forEach(x => rb(g, x, -0.12, 0.05, 0.1, 0.02, 1.5, body, 0.01));                         // twin posts, open knee space
   const hs = new THREE.Group(); hs.position.set(0, 1.12, -0.06); hs.rotation.x = -0.35; g.add(hs);       // tilted screen
-  rb(hs, 0, 0, 0.46, 0.08, -0.36, 0.36, body, 0.02);
+  rb(hs, 0, 0, 0.46, 0.08, -0.36, 0.36, M.redSatin, 0.02);                                           // red housing: reads as a branded kiosk from the street too
   plane(hs, 0.4, 0.62, screenMaterial(SIGN.menus[4], 0.9), 0, 0, 0.041);
+  plane(hs, 0.3, 0.3 * 0.44, M.wordmark, 0, 0.12, -0.041, Math.PI);                                   // wordmark on the back of the housing
   rb(g, 0, -0.1, 0.5, 0.06, 1.5, 1.6, M.redSatin, 0.01);
   plane(g, 0.2, 0.086, M.wordmark, 0, 1.55, -0.069);
   rb(g, 0.2, 0.08, 0.14, 0.16, 0.86, 0.88, body, 0.01);                                                // card shelf at 880 mm
@@ -480,6 +481,15 @@ B.handwash = (g, w, d) => {
 // the day's nests, set at the end of the pasta bench so staff at the machines can
 // reach it and passers-by see the stock through the glazing.
 B.pastaShelf = (g, w, d, it) => {
+  if (it && it.low) {   // landlord rev: counter-height chilled pasta well in the counter joinery (no tall rack in the window)
+    B.builtIn(g, w, d, { units: [['fridge', w]] });
+    rb(g, 0, 0, w - 0.08, d - 0.08, 0.86, 0.925, M.steelPlain, 0.004);                                // chilled well liner
+    const n = Math.max(1, Math.floor((w - 0.1) / 0.34));
+    for (let k = 0; k < n; k++) tray(g, -w / 2 + 0.05 + (k + 0.5) * (w - 0.1) / n, 0.86, 0, (w - 0.1) / n - 0.02, d - 0.12, 0.06, M.kraft, true);
+    const gl = plane(g, w - 0.04, 0.3, M.glassTint, 0, 1.1, d / 2 - 0.03); gl.renderOrder = 3;           // sneeze glass
+    rb(g, 0, d / 2 - 0.03, w - 0.04, 0.012, 1.24, 1.26, M.steelPlain, 0.003);
+    return;
+  }
   if (it && it.chilled) {                                    // refrigerated open-front multideck, 0–5 °C
     rb(g, 0, 0, w, d, 0, 0.2, M.blackMetal, 0.006);
     bx(g, 0, d / 2 + 0.001, w - 0.06, 0.004, 0.04, 0.16, M.steelDark);                                   // intake grille
@@ -557,12 +567,15 @@ B.binStation = (g, w, d) => {
 B.staffGate = (g, w, d) => {
   const h = 1.0;
   [-w / 2 + 0.02, w / 2 - 0.02].forEach(x => rb(g, x, 0, 0.03, 0.03, 0, h + 0.2, M.steelPlain, 0.005));
-  rb(g, 0, 0, w - 0.08, 0.025, h - 0.03, h, M.steelPlain, 0.004);
-  rb(g, 0, 0, w - 0.08, 0.025, 0.12, 0.15, M.steelPlain, 0.004);
-  const gl = plane(g, w - 0.1, h - 0.18, M.glassTint, 0, 0.14 + (h - 0.18) / 2, 0); gl.renderOrder = 3;
-  if (M.manifest) plane(g, w - 0.12, 0.07, M.manifest, 0, 0.925, 0.004);
-  rb(g, 0, 0.016, 0.26, 0.006, 0.7, 0.78, M.blackMetal, 0.002);
-  plane(g, 0.22, 0.05, M.whitePowder, 0, 0.74, 0.02);
+  // leaf hangs on a pivot at the west post so the walkthrough can swing it open (−rotation.y = into the pasta area)
+  const px = -w / 2 + 0.04, leaf = new THREE.Group(); leaf.position.set(px, 0, 0); g.add(leaf); g.userData.gateLeaf = leaf;
+  const L = (x) => x - px;
+  rb(leaf, L(0), 0, w - 0.08, 0.025, h - 0.03, h, M.steelPlain, 0.004);
+  rb(leaf, L(0), 0, w - 0.08, 0.025, 0.12, 0.15, M.steelPlain, 0.004);
+  const gl = plane(leaf, w - 0.1, h - 0.18, M.guardGlass, L(0), 0.14 + (h - 0.18) / 2, 0); gl.renderOrder = 3;
+  if (M.manifest) plane(leaf, w - 0.12, 0.07, M.manifest, L(0), 0.925, 0.004);
+  rb(leaf, L(0), 0.016, 0.26, 0.006, 0.7, 0.78, M.blackMetal, 0.002);
+  plane(leaf, 0.22, 0.05, M.whitePowder, L(0), 0.74, 0.02);
 };
 // ------------------------------------------------------------ signage objects
 B.menuScreens = (g, w, d, it) => {
@@ -587,7 +600,7 @@ B.orderScreen = (g, w, d) => {
 B.glassScreen = (g, w, d, it) => {
   const h = it.height || 1.3;
   if (M.manifest) [0.004, -0.004].forEach(o => { const b = plane(g, w - 0.04, 0.07, M.manifest, 0, 0.925, o); if (o < 0) b.rotation.y = Math.PI; });   // Part K band 850–1000
-  const s = plane(g, w, h - 0.05, M.glassTint, 0, 0.05 + (h - 0.05) / 2, 0); s.renderOrder = 3;
+  const s = plane(g, w, h - 0.05, M.guardGlass, 0, 0.05 + (h - 0.05) / 2, 0); s.renderOrder = 3;   // 10 mm toughened, slightly visible edge-tint
   rb(g, 0, 0, w, 0.03, h - 0.01, h + 0.02, M.steelPlain, 0.005);
   rb(g, 0, 0, w, 0.03, 0.0, 0.06, M.steelPlain, 0.005);
   [-w / 2, w / 2].forEach(x => rb(g, x, 0, 0.03, 0.03, 0, h + 0.02, M.steelPlain, 0.005));
@@ -603,8 +616,7 @@ B.table = (g, w, d) => {
     rb(g, x, z, 0.4, 0.4, 0.0, 0.012, M.whitePowder, 0.004);
   }
 };
-export function chair(g) { // one-piece polypropylene stacking chair, SH 460
-  const mat = M.redPlastic;
+export function chair(g, mat = M.redPlastic) { // one-piece polypropylene stacking chair, SH 460
   rb(g, 0, 0.01, 0.44, 0.43, 0.43, 0.46, mat, 0.012);
   const back = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 24, 1, true, Math.PI - 0.55, 1.1), mat);
   back.material = mat.clone(); back.material.side = THREE.DoubleSide;
@@ -647,4 +659,62 @@ export function pendant(g) { // Ila Orient red pendant
   const b = new THREE.Mesh(new THREE.SphereGeometry(0.048, 20, 14), M.bulb); b.position.set(0, 2.06, 0); g.add(b);
 }
 
+// Built-in back-of-house joinery (client brief 6 Oct 2026): replaces the tall
+// freestanding fridges. Same language as the service counter — recessed black
+// plinth, flush red lacquer fronts, cream terrazzo worktop — with integrated
+// under-counter refrigeration behind the panels. it.units = [[kind, width], …],
+// kind: 'fridge' | 'freezer' | 'drawers' | 'door'; it.prep adds a stainless prep inset.
+B.builtIn = (g, w, d, it) => {
+  const front = d / 2, H = 0.88;
+  rb(g, 0, -0.04, w - 0.02, d - 0.1, 0, 0.1, M.blackMetal, 0.005);                                   // recessed plinth
+  rb(g, 0, -0.02, w - 0.04, d - 0.04, 0.1, H, M.whitePowder, 0.008);                                 // carcass, inside the red end panels (no coplanar faces)
+  rb(g, 0, 0, w + 0.01, d + 0.02, H, H + 0.04, fitted(M.stone, w, d), 0.008);                        // terrazzo worktop
+  if (it.prep) rb(g, it.prep[0], 0.01, it.prep[1], d - 0.12, H + 0.04, H + 0.045, fitted(M.steel, it.prep[1], d), 0.003);
+  const units = it.units || [['door', w]];
+  const tot = units.reduce((a, [, uw]) => a + uw, 0);
+  let x = -w / 2;
+  const led = new THREE.MeshStandardMaterial({ color: 0x051208, emissive: 0x44ff88, emissiveIntensity: 0.8 });
+  for (const [kind, uw0] of units) {
+    const uw = uw0 * w / tot, cx = x + uw / 2; x += uw;
+    const panel = (y0, y1) => { rb(g, cx, front - 0.01, uw - 0.006, 0.02, y0, y1, M.redSatin, 0.006);
+      rb(g, cx, front + 0.001, uw * 0.55, 0.012, y1 - 0.035, y1 - 0.02, M.blackMetal, 0.004); };   // finger-pull shadow line
+    if (kind === 'drawers') [[0.11, 0.37], [0.375, 0.62], [0.625, H - 0.005]].forEach(([a, b]) => panel(a, b));
+    else if (kind === 'fridge' || kind === 'freezer') {
+      const n = uw > 0.9 ? 2 : 1;
+      for (let i = 0; i < n; i++) { const sx = cx - uw / 2 + (i + 0.5) * uw / n;
+        rb(g, sx, front - 0.01, uw / n - 0.006, 0.02, 0.11, H - 0.005, M.redSatin, 0.006);
+        rb(g, sx, front + 0.001, uw / n * 0.55, 0.012, H - 0.04, H - 0.025, M.blackMetal, 0.004); }
+      plane(g, 0.05, 0.018, led, cx + uw / 2 - 0.06, 0.16, front + 0.002);                        // temp readout in the kick
+    } else panel(0.11, H - 0.005);
+  }
+  [-1, 1].forEach(sd => rb(g, sd * (w / 2 - 0.009), 0, 0.018, d, 0.1, H, M.redSatin, 0.004));     // end panels
+};
+// Chef's cookware wall (landlord rev): stainless rail with frying pans, sauté pans and
+// saucepans hung in size order, plus a slotted rack of GN 1/1 trays at the end.
+// Local frame matches the built-in run below it (front = +d/2, wall = -d/2).
+B.cookwareRail = (g, w, d) => {
+  const zw = -d / 2 + 0.03, railY = 1.78, n = 4, rackW = 0.36, span = w - rackW - 0.12;
+  rb(g, -rackW / 2 - 0.03, zw + 0.03, span + 0.04, 0.02, railY - 0.012, railY + 0.012, M.steelPlain, 0.006);   // rail
+  [-w / 2 + 0.06, -w / 2 + 0.06 + span].forEach(x => rb(g, x, zw + 0.01, 0.03, 0.04, railY - 0.03, railY + 0.03, M.steelPlain, 0.004));
+  const pans = [['fry', 0.098, M.blackMetal], ['fry', 0.09, M.blackMetal], ['saute', 0.095, M.steelPlain], ['sauce', 0.085, M.steelPlain]];
+  for (let i = 0; i < n; i++) {
+    const [kind, r, mat] = pans[i], x = -w / 2 + 0.06 + span * (i + 0.5) / n, depth = kind === 'fry' ? 0.045 : kind === 'saute' ? 0.07 : 0.10;
+    const hl = kind === 'sauce' ? 0.17 : 0.2, cyY = railY - 0.03 - hl - r;
+    rb(g, x, zw + 0.045, 0.025, 0.012, cyY + r - 0.01, railY - 0.02, mat === M.blackMetal ? M.blackMetal : M.steelPlain, 0.004);   // handle up to the hook
+    cy(g, x, railY - 0.01, -(zw + 0.035) * -1, 0.006, 0.04, M.steelPlain, 6);                                                   // S-hook
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r * (kind === 'fry' ? 0.8 : 0.97), depth, 32, 1, false), mat);
+    body.rotation.x = Math.PI / 2; body.position.set(x, cyY, zw + 0.005 + depth / 2); g.add(body);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(r, 0.005, 6, 32), M.steelPlain); rim.position.set(x, cyY, zw + 0.005 + depth); g.add(rim);
+    const inside = new THREE.Mesh(new THREE.CircleGeometry(r * 0.93, 32), mat === M.blackMetal ? M.steelDark : M.steel); inside.position.set(x, cyY, zw + 0.004 + depth); g.add(inside);
+  }
+  // tray rack: 6 × GN 1/1 sheet trays standing in a wall-mounted slotted rack
+  const rx = w / 2 - rackW / 2 - 0.04;
+  rb(g, rx, zw + 0.1, rackW, 0.2, 1.38, 1.40, M.steelPlain, 0.004);
+  [-1, 1].forEach(sd => rb(g, rx + sd * (rackW / 2 - 0.01), zw + 0.1, 0.02, 0.2, 1.38, 1.98, M.steelPlain, 0.004));
+  for (let k = 0; k < 6; k++) rb(g, rx - rackW / 2 + 0.04 + k * (rackW - 0.08) / 5, zw + 0.1, 0.008, 0.33, 1.40, 1.93, k % 2 ? M.steel : M.steelPlain, 0.002);
+  rb(g, rx, zw + 0.012, rackW, 0.02, 1.38, 1.98, M.steelPlain, 0.004);
+};
+// Enclosed wash-up (landlord rev): the pot wash sits inside a built-in service box
+// that reads as part of the kitchen wall — subway-tiled partitions up to the bulkhead,
+// a flush red sliding door matching the cabinetry, and no view of sinks or racks.
 export const BUILDERS = B;

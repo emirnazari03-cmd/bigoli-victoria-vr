@@ -12,6 +12,8 @@ import { OPTIONS, STEPS } from './layouts.js';
 import { buildMaterials, fitted } from './materials.js';
 import { buildSignage, screenMaterial } from './screens.js';
 import { initModels, BUILDERS, rb, cy, chair, stool, pendant } from './models.js';
+import { buildFilm } from './film.js';
+import { setupVR } from './vr.js';
 
 // ------------------------------------------------------------------ renderer
 const stage = document.getElementById('stage');
@@ -47,11 +49,26 @@ const loadTex = (url) => { const t = loader.load(url); t.colorSpace = THREE.SRGB
 const M = buildMaterials(loadTex);
 const SIGN = buildSignage(loadTex);
 const logoRed = loadTex('textures/logo_red.jpg');
-const wordmarkTex = loadTex('textures/logo_red.jpg'); wordmarkTex.repeat.set(1, 0.44); wordmarkTex.offset.set(0, 0.17);
+const wordmarkTex = loadTex('textures/wordmark.jpg');   // BIGOLI / FRESH PASTA only (character's feet masked out)
 const charsTex = loadTex('textures/characters.png'); charsTex.wrapS = THREE.RepeatWrapping;
 const sloganTex = loadTex('textures/slogan.png');
 M.logo = new THREE.MeshStandardMaterial({ map: logoRed, roughness: 0.45, emissive: 0xffffff, emissiveMap: logoRed, emissiveIntensity: 0.12 });
 M.wordmark = new THREE.MeshStandardMaterial({ map: wordmarkTex, roughness: 0.4, emissive: 0xffffff, emissiveMap: wordmarkTex, emissiveIntensity: 0.35 });
+// Fascia lettering: white BIGOLI / FRESH PASTA keyed out of the logo artwork so the
+// letters sit straight on the red fascia as built-up letters (as on the existing store).
+const lettersCanvas = document.createElement('canvas'); lettersCanvas.width = 984; lettersCanvas.height = 420;
+const lettersTex = new THREE.CanvasTexture(lettersCanvas); lettersTex.colorSpace = THREE.SRGBColorSpace; lettersTex.anisotropy = 8;
+const shadowTex = new THREE.CanvasTexture(document.createElement('canvas'));
+{ const img = new Image(); img.onload = () => {
+    const c = lettersCanvas, g = c.getContext('2d'); g.drawImage(img, 14, 0, 492, 210, 0, 0, c.width, c.height);
+    const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+    for (let i = 0; i < px.length; i += 4) { const m = Math.min(px[i], px[i + 1], px[i + 2]); const a = Math.max(0, Math.min(1, (m - 70) / 110)); px[i] = px[i + 1] = px[i + 2] = 255; px[i + 3] = a * 255; }
+    g.putImageData(d, 0, 0); lettersTex.needsUpdate = true;
+    const sc = shadowTex.image; sc.width = c.width; sc.height = c.height; const sg = sc.getContext('2d'); sg.filter = 'blur(6px)'; sg.drawImage(c, 0, 0);
+    const sd = sg.getImageData(0, 0, sc.width, sc.height); for (let i = 0; i < sd.data.length; i += 4) { sd.data[i] = sd.data[i + 1] = sd.data[i + 2] = 0; sd.data[i + 3] *= 0.35; } sg.putImageData(sd, 0, 0); shadowTex.needsUpdate = true;
+  }; img.src = 'textures/wordmark.jpg'; }
+M.fasciaLetters = new THREE.MeshStandardMaterial({ map: lettersTex, transparent: true, roughness: 0.35, emissive: 0xffffff, emissiveMap: lettersTex, emissiveIntensity: 0.25, depthWrite: false });
+M.fasciaShadow = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false });
 M.characters = new THREE.MeshStandardMaterial({ map: charsTex, roughness: 0.7 });
 M.slogan = new THREE.MeshStandardMaterial({ map: sloganTex, roughness: 0.7 });
 M.manifest = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, transparent: true, opacity: 0.55, depthWrite: false });
@@ -122,7 +139,7 @@ slab(ceilings, E.outline, E.ceiling, M.ceiling, true);
 box(ceilings, 0, 5.28, 0, 0.3, W.glazing.head, W.ceiling, M.soffit);
 box(ceilings, 5.70, 9.76, 0, 0.12, E.glazing.head, E.ceiling, M.soffit);
 E.bulkheads.forEach(b => box(ceilings, b.x0, b.x1, b.z0, b.z1, b.h, E.ceiling, M.soffit));
-box(ceilings, W.stair.lowHeadroom.x0, W.stair.lowHeadroom.x1, W.stair.lowHeadroom.z0, W.stair.lowHeadroom.z1, 2.0, W.ceiling, M.soffit);
+box(ceilings, W.stair.lowHeadroom.x0, W.stair.lowHeadroom.x1, W.stair.lowHeadroom.z0, W.stair.lowHeadroom.z1, 2.0, W.ceiling, fitted(M.plaster, 0.86, 1.67));   // existing upper-stair soffit (survey: 1540–2480), same plaster as the stair enclosure
 const downlights = [[1.2, 1.1], [2.7, 1.1], [3.9, 1.1], [1.9, 3.0], [3.4, 3.2], [6.5, 1.0], [8.1, 1.0], [6.7, 2.8], [8.3, 2.8], [6.9, 4.5]];
 downlights.forEach(([x, z]) => {
   const y = x < 5.5 ? W.ceiling : E.ceiling;
@@ -184,12 +201,12 @@ const WALL_LINES = {
   W: [[[0, 0.02], [0, 1.495]], [[cb.x1, 1.495], [cb.x1, 3.386]], [[0, 1.495], [cb.x1, 1.495]], [[0, 3.386], [cb.x1, 3.386]], [[0, 3.386], [0, 4.84]], [[0, 4.84], [2.0, 4.30]], [[2.0, 4.30], [4.42, 4.91]], [[5.28, 0.02], [5.28, 1.19]], [[5.28, 1.98], [5.28, 2.13]]],
   E: [[[5.70, 0.02], [5.70, 1.19]], [[5.70, 1.98], [5.70, 5.25]], [[5.70, 5.25], [9.47, 6.085]], [[9.76, 4.894], [9.76, 0.02]]],
 };
-function applyFinishes(opsUnit) {
+function applyFinishes(opsUnit, tileBoth) {
   finishes.clear();
   for (const u of ['W', 'E']) {
-    const ref = u === 'W' ? Wref : Eref, ops = u === opsUnit;
+    const ref = u === 'W' ? Wref : Eref, ops = u === opsUnit || tileBoth;
     WALL_LINES[u].forEach(([a, b]) => {
-      wallPlane(finishes, a, b, ref, 0, ops ? 2.1 : 1.2, ops ? M.kitchenTile : M.diningTile);
+      wallPlane(finishes, a, b, ref, 0, ops ? 3.6 : 1.2, ops ? M.kitchenTile : M.diningTile);   // ops: small white subway, floor to ceiling
       if (!ops) wallPlane(finishes, a, b, ref, 1.2, 1.235, M.oak, 0.012);   // oak capping rail
     });
   }
@@ -199,7 +216,7 @@ function applyFinishes(opsUnit) {
 // Shopfront + doors are rebuilt per option: an option may relocate a door
 // (layouts.js `shopfront`); otherwise the surveyed arrangement is used.
 const front = new THREE.Group(); shell.add(front);
-let frontSegs = [], frontBoxes = [];
+let frontSegs = [], frontBoxes = [], canopyLights = [];
 function shopfront(x0, x1, head, mullions) {
   const shell = front;
   box(shell, x0, x1, -0.12, 0, 0, 0.32, fitted(M.redTile, x1 - x0, 0.32));
@@ -214,17 +231,79 @@ const SURVEY_FRONT = {
   east: { glazing: [E.glazing.x0, E.glazing.x1, [7.315]], door: { ...E.door, sign: 'EXIT' } },
 };
 function buildFront(opt) {
-  front.clear(); frontSegs = []; frontBoxes = [];
+  front.clear(); frontSegs = []; frontBoxes = []; canopyLights = [];
   const f = opt.shopfront || SURVEY_FRONT;
-  shopfront(f.west.glazing[0], f.west.glazing[1], W.glazing.head, f.west.glazing[2]);
-  shopfront(f.east.glazing[0], f.east.glazing[1], E.glazing.head, f.east.glazing[2]);
-  doorway(f.west.door, W.glazing.head, f.west.door.sign);
-  doorway(f.east.door, E.glazing.head, f.east.door.sign);
+  const head = Math.min(W.glazing.head, E.glazing.head);   // one transom line across the frontage (under the fascia frame band)
+  shopfront(f.west.glazing[0], f.west.glazing[1], head, f.west.glazing[2]);
+  shopfront(f.east.glazing[0], f.east.glazing[1], head, f.east.glazing[2]);
+  doorway(f.west.door, head, f.west.door.sign);
+  doorway(f.east.door, head, f.east.door.sign);
   if (!opt.partyDoorOpen) {   // existing leaf held open against the East side
     box(front, PW.x1, PW.x1 + 0.79, PW.door.z1 + 0.005, PW.door.z1 + 0.045, 0.01, 1.98, M.whitePowder);
     frontBoxes.push([PW.x1, PW.x1 + 0.79, PW.door.z1, PW.door.z1 + 0.05]);
   }
   (f.infill || []).forEach(([x0, x1]) => { box(front, x0, x1, -0.12, 0, 0, W.glazing.head, fitted(M.plaster, x1 - x0, 3.2)); frontSegs.push([x0, 0, x1, 0]); });
+  // client brief 6 Oct 2026: ONE main sign, centred over the entrance bay between the two
+  // shopfronts; a fixed branded canopy over each shopfront; 2 tables + 4 chairs in front of each
+  const signX = (f.west.glazing[1] + f.east.glazing[0]) / 2;
+  const LH = 0.64, LW = LH * 984 / 420;                                                           // letters fill the 720 mm fascia
+  const sh = new THREE.Mesh(new THREE.PlaneGeometry(LW, LH), M.fasciaShadow); sh.position.copy(V(signX + 0.012, 3.97, -0.322)); sh.renderOrder = 2; front.add(sh);
+  const wm = new THREE.Mesh(new THREE.PlaneGeometry(LW, LH), M.fasciaLetters); wm.position.copy(V(signX, 3.98, -0.335)); wm.renderOrder = 3; front.add(wm);
+  // landlord rev: ONE continuous awning across the whole frontage, so it covers both doors as well as the seating
+  streetCanopy(Math.min(f.west.glazing[0], f.west.door.x0), Math.max(f.east.glazing[1], f.east.door.x1));
+  [f.west.glazing, f.east.glazing].forEach(([x0, x1]) => streetSeating(x0, x1));
+}
+// Fixed shopfront canopy (landlord rev): Italian green/white check, solution-dyed acrylic
+// on a fixed black powder-coated steel frame with tie-rods from the fascia. 1.60 m
+// projection, 250 mm valance; underside 2.50 m (≥ 2.4 m footway clearance), 2.5 m back
+// from the kerb. No red on the canopy. Warm LED wash underneath.
+const CANOPY = { top: 3.45, front: 2.75, proj: 1.60, val: 0.25 };   // underside 2.50 m, 2.5 m back from the kerb
+function checkMat(u, v) { const m = fitted(M.canopyCheck, u, v); m.side = THREE.DoubleSide; return m; }
+function streetCanopy(x0, x1) {
+  const w = x1 - x0 - 0.06, cx = (x0 + x1) / 2, { top, front: fy, proj, val } = CANOPY;
+  const rise = top - fy, len = Math.hypot(proj, rise), a = Math.atan2(rise, proj);
+  const g = new THREE.Group(); g.position.copy(V(cx, 0, -0.12)); front.add(g);   // local +z = out to the street
+  const skin = new THREE.Mesh(new THREE.PlaneGeometry(w, len), checkMat(w, len));
+  skin.position.set(0, (top + fy) / 2, proj / 2); skin.rotation.x = -Math.PI / 2 + a; g.add(skin);
+  const v = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.02, val), checkMat(w + 0.02, val * 2)); v.material.map.offset.set(0, 0.5);
+  v.position.set(0, fy - val / 2 + 0.01, proj + 0.005); g.add(v);
+  [-1, 1].forEach(sd => {                                                                       // closed side cheeks, same fabric
+    const sh = new THREE.Shape([new THREE.Vector2(0, top), new THREE.Vector2(proj, fy + 0.01), new THREE.Vector2(proj, fy - val + 0.01), new THREE.Vector2(0, fy - val + 0.25)]);
+    const geo = new THREE.ShapeGeometry(sh), m = M.canopyCheck.clone(); m.side = THREE.DoubleSide;
+    for (const k of ['map', 'normalMap', 'roughnessMap']) if (m[k]) { m[k] = m[k].clone(); m[k].repeat.set(2, 2); m[k].needsUpdate = true; }   // UVs in metres
+    const ch = new THREE.Mesh(geo, m); ch.rotation.y = -Math.PI / 2; ch.position.set(sd * (w / 2 + 0.005), 0, 0); g.add(ch);
+  });
+  // steel frame: wall rail, front rail, rafters, tie-rods to the fascia
+  const bar = (p0, p1, r = 0.016) => { const d = p1.clone().sub(p0), m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 10), M.blackMetal);
+    m.position.copy(p0).add(p1).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); g.add(m); };
+  const n = Math.max(2, Math.round(w / 1.2) + 1);
+  rb(g, 0, 0.03, w, 0.06, top - 0.04, top + 0.04, M.blackMetal, 0.01);                          // wall rail
+  bar(new THREE.Vector3(-w / 2, fy - 0.02, proj - 0.02), new THREE.Vector3(w / 2, fy - 0.02, proj - 0.02), 0.02);   // front rail
+  for (let i = 0; i < n; i++) {
+    const x = -w / 2 + 0.06 + i * (w - 0.12) / (n - 1);
+    bar(new THREE.Vector3(x, top - 0.03, 0.03), new THREE.Vector3(x, fy - 0.03, proj - 0.02), 0.014);          // rafter under the fabric
+    bar(new THREE.Vector3(x, top + 0.16, 0.02), new THREE.Vector3(x, fy + 0.03, proj - 0.04), 0.011);          // tie-rod
+    rb(g, x, 0.01, 0.08, 0.02, top + 0.08, top + 0.24, M.blackMetal, 0.004);
+  }
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(w - 0.1, 0.012, 0.03), M.ledWarm); strip.position.set(0, fy - 0.045, proj - 0.06); g.add(strip);
+  const l = new THREE.PointLight(0xffd9a8, 0, 3.2, 2); l.position.set(0, fy - 0.15, proj * 0.6); g.add(l); canopyLights.push(l);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+}
+// Pavement seating (pavement licence needed): 600 × 600 white bistro tables, green chairs either
+// side along the frontage, so furniture stays within 0.85 m of the glass and the
+// footway keeps > 3.2 m clear to the kerb.
+const PAVE_Y = -0.15;
+function streetSeating(x0, x1) {
+  const span = x1 - x0;
+  [0.27, 0.73].forEach(t => {
+    const tx = x0 + span * t, tz = -0.6;
+    const tg = new THREE.Group(); tg.position.copy(V(tx, PAVE_Y, tz)); BUILDERS.table(tg, 0.6, 0.6); front.add(tg);
+    [[-0.52, 'E'], [0.52, 'W']].forEach(([dx, face]) => {
+      const cg = new THREE.Group(); cg.position.copy(V(tx + dx, PAVE_Y, tz)); cg.rotation.y = FACE_ROT[face]; chair(cg, M.greenPlastic); front.add(cg);
+    });
+    frontBoxes.push([tx - 0.78, tx + 0.78, -0.92, -0.28]);
+    [tg].forEach(o => o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }));
+  });
 }
 function doorway(d, glazingHead, labelText) {
   const shell = front;
@@ -254,7 +333,6 @@ box(upper, -0.6, 11.0, -0.12, 0.0, W.glazing.head, 3.62, M.frame);
 box(upper, -0.6, 11.0, -0.12, 6.4, 4.35, 9.2, fitted(M.brick, 11.6, 4.85));
 box(upper, -0.7, 11.1, -0.22, 0.0, 4.35, 4.45, M.stone);                                     // string course
 box(shell, -0.35, 9.85, -0.32, -0.1, 3.62, 4.34, M.redSatin);                                // fascia
-[2.64, 7.73].forEach(cx => { const p = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.82), M.wordmark); p.position.set(cx, 3.98, 0.325); shell.add(p); });
 box(shell, -0.35, 9.85, -0.42, -0.32, 4.3, 4.34, M.frame);                                   // fascia light trough
 box(shell, -0.3, 9.8, -0.42, -0.38, 4.27, 4.3, M.ledWarm, false);
 box(shell, -0.6, -0.35, -0.12, 6.4, 0, 4.35, fitted(M.brick, 0.3, 4.35));
@@ -305,7 +383,7 @@ const layout = new THREE.Group(); scene.add(layout);
 const labelsGroup = new THREE.Group(); scene.add(labelsGroup);
 const flowGroup = new THREE.Group(); scene.add(flowGroup);
 let current = null, animated = [], optionLights = [];
-const NO_COLLIDE = new Set(['staffGate', 'orderTV', 'extruder', 'traySet', 'board', 'menuScreens', 'orderScreen', 'canopy', 'feature', 'slogan', 'characters', 'pendant', 'chair', 'stool', 'filler']);
+const NO_COLLIDE = new Set(['washEnclosure', 'cookwareRail', 'toiletSign', 'extractRoute', 'staffGate', 'orderTV', 'extruder', 'traySet', 'board', 'menuScreens', 'orderScreen', 'canopy', 'feature', 'slogan', 'characters', 'pendant', 'chair', 'stool', 'filler']);
 const NAMES = {
   pastaBench: 'Pasta production bench', extruder: 'Fresh pasta extruder (benchtop mixer-extruder)', traySet: 'Pasta trays 600 × 400',
   board: 'Dough board + scale', rack: 'Drying / holding rack (10 trays, mobile)', boiler: 'Pasta boiler, automatic basket lift',
@@ -316,7 +394,7 @@ const NAMES = {
   underFridge: 'Under-counter fridge', prepTable: 'Prep table', ledge: 'Oak window bar', stool: 'Bar stool (RIO, SH 750)',
   chair: 'Stacking chair (Pop, SH 460)', table: 'Table (Mizzi)', banquette: 'Banquette (terrazzo base, upholstered)',
   pendant: 'Pendant (Ila, red)', pastaShelf: 'Fresh pasta shelving (baskets, staff side)', deliveryPoint: 'Delivery / Uber Eats pick-up point',
-  orderTV: 'Order-status TV (55″)', staffGate: 'Staff gate (self-closing, half height)', handwash: 'Hand-wash basin (knee-operated, hands only)', binStation: 'Customer waste + tray return station', feature: 'Brand feature wall', characters: 'Pasta-character graphic band', slogan: 'Slogan strip',
+  orderTV: 'Order-status TV (55″)', cookwareRail: 'Cookware rail: pans + GN tray rack', washEnclosure: 'Enclosed wash-up (sliding door)', builtIn: 'Built-in cabinetry (integrated under-counter refrigeration)', staffGate: 'Staff gate (self-closing, half height)', handwash: 'Hand-wash basin (knee-operated, hands only)', binStation: 'Customer waste + tray return station', feature: 'Brand feature wall', characters: 'Pasta-character graphic band', slogan: 'Slogan strip',
 };
 
 function frameFor(it) {
@@ -367,7 +445,7 @@ function buildOption(id) {
   optionLights.forEach(l => { scene.remove(l); const k = interior.findIndex(([x]) => x === l); if (k >= 0) interior.splice(k, 1); }); optionLights = [];
   buildFront(current);
   colBoxes = [...shellBoxes, ...frontBoxes]; colSegs = [...shellSegs, ...frontSegs];
-  applyFinishes(current.opsUnit);
+  applyFinishes(current.opsUnit, current.tileBoth);
   const addLight = (l, i) => { scene.add(l); optionLights.push(l); interior.push([l, i]); };
 
   for (const it of current.items) {
@@ -387,16 +465,24 @@ function buildOption(id) {
       const [a, b] = it.wall, len = Math.hypot(b[0] - a[0], b[1] - a[1]), h = 0.3;
       const mat = M.characters.clone(); mat.map = charsTex.clone(); mat.map.needsUpdate = true; mat.map.repeat.set(len / (h * 1317 / 241), 1);
       g.add(wallGraphic(it, mat, h, it.y ?? 1.28, len, 0.5).p);
+    } else if (it.type === 'toiletSign') {
+      toiletSign(g, it);
+    } else if (it.type === 'washEnclosure') {
+      washEnclosure(g, it);
+    } else if (it.type === 'extractRoute') {
+      extractRoute(g, it);
     } else if (it.type === 'canopy') {
       if (it.wall === 'N') {
+        // the hood's integrated task lights: two warm-white sources under the canopy over the cook line
+        [0.15, 0.5, 0.85].forEach(f => { const l = new THREE.PointLight(0xfff1dc, 5, 2.4, 2); l.position.copy(V(it.x0 + (it.x1 - it.x0) * f, 1.95, (it.z0 + it.z1) / 2 + 0.1)); addLight(l, 5); });
         const sub = new THREE.Group(), len = it.x1 - it.x0, depth = it.z1 - it.z0;
         sub.position.set((it.x0 + it.x1) / 2, 0, -it.z1); sub.rotation.y = -Math.PI / 2; g.add(sub);
         const addLocal = (l, i) => { sub.updateMatrixWorld(true); l.position.applyMatrix4(sub.matrixWorld); addLight(l, i); };
-        buildCanopy(sub, { x0: 0, x1: depth, z0: -len / 2, z1: len / 2, wall: 'W' }, addLocal);
+        buildCanopy(sub, { x0: 0, x1: depth, z0: -len / 2, z1: len / 2, wall: 'W', ductTop: it.ductTop }, addLocal);
       } else buildCanopy(g, it, addLight);
     } else {
       const { cx, cz, w, d, f } = frameFor(it);
-      g.position.copy(V(cx, 0, cz)); g.rotation.y = FACE_ROT[f];
+      g.position.copy(V(cx, 0, cz)); g.rotation.y = FACE_ROT[f] + (it.rot || 0);
       const zones = {};
       if (it.zones) for (const [k, [p0, p1]] of Object.entries(it.zones)) { const a = alongToLocal(it, p0), b = alongToLocal(it, p1); zones[k] = [Math.min(a, b), Math.max(a, b)]; }
       (BUILDERS[it.type] || ((gg) => rb(gg, 0, 0, w, d, 0, 0.9, M.steelPlain)))(g, w, d, it, animated, zones);
@@ -444,8 +530,82 @@ function buildCanopy(g, it, addLight) {
   const fg = new THREE.Group(); fg.position.copy(V(wallX + s * depth * 0.42, 2.32, cz)); fg.rotation.z = -s * 0.5; g.add(fg);
   const filt = new THREE.Mesh(new THREE.PlaneGeometry(depth * 0.85, len - 0.06), fm); filt.rotation.x = Math.PI / 2; fg.add(filt);
   box(g, Math.min(outX - s * 0.1, outX - s * 0.06), Math.max(outX - s * 0.1, outX - s * 0.06), it.z0 + 0.05, it.z1 - 0.05, 2.08, 2.1, M.ledCool, false);
-  const dx = wallX + s * 0.3; box(g, dx - 0.2, dx + 0.2, cz - 0.25, cz + 0.25, 2.56, 3.66, M.steelPlain);
+  const dx = wallX + s * 0.3; box(g, dx - 0.2, dx + 0.2, cz - 0.25, cz + 0.25, 2.56, it.ductTop || 3.66, M.steelPlain);
   const l = new THREE.PointLight(0xf6f8ff, 3.5, 0, 2); l.position.copy(V(outX - s * 0.35, 1.9, cz)); addLight(l, 3.5);
+}
+// Hanging wayfinding sign: TOILET + male/female pictograms + up arrow, double-sided,
+// 600 × 200 aluminium tray sign on two ceiling drop-rods, underside at 2.30 m.
+let toiletTex = null;
+function makeToiletTex() {
+  const c = document.createElement('canvas'); c.width = 1200; c.height = 400; const g = c.getContext('2d');
+  const paint = () => {
+    g.fillStyle = '#2f6a45'; g.fillRect(0, 0, 1200, 400);
+    g.strokeStyle = '#f5f2e9'; g.lineWidth = 6; g.strokeRect(18, 18, 1164, 364);
+    g.fillStyle = '#ffffff';
+    const person = (x, dress) => {          // standard ISO 7001-style pictograms
+      g.beginPath(); g.arc(x, 110, 30, 0, 7); g.fill();
+      if (dress) { g.beginPath(); g.moveTo(x - 26, 150); g.lineTo(x + 26, 150); g.lineTo(x + 52, 270); g.lineTo(x - 52, 270); g.closePath(); g.fill(); }
+      else g.fillRect(x - 34, 150, 68, 120);
+      g.fillRect(x - 28, 262, 22, 88); g.fillRect(x + 6, 262, 22, 88);
+      g.fillRect(x - 52, 152, 14, 100); g.fillRect(x + 38, 152, 14, 100);
+    };
+    person(120, false); g.fillRect(205, 70, 6, 280); person(290, true);
+    g.font = "600 150px Oswald, 'Arial Narrow', sans-serif"; g.textBaseline = 'middle'; g.fillText('TOILET', 380, 212);
+    g.beginPath(); g.moveTo(1080, 70); g.lineTo(1150, 160); g.lineTo(1105, 160); g.lineTo(1105, 330); g.lineTo(1055, 330); g.lineTo(1055, 160); g.lineTo(1010, 160); g.closePath(); g.fill();   // up arrow: upstairs
+    if (toiletTex) toiletTex.needsUpdate = true;
+  };
+  toiletTex = new THREE.CanvasTexture(c); toiletTex.colorSpace = THREE.SRGBColorSpace; toiletTex.anisotropy = 8; paint();
+  if (document.fonts) document.fonts.load('600 40px Oswald').then(paint).catch(() => {});
+  return toiletTex;
+}
+function toiletSign(g, it) {
+  const tex = toiletTex || makeToiletTex(), ceil = it.ceiling || 3.67, y0 = 2.3, W2 = 0.6, H2 = 0.2;
+  g.position.copy(V(it.x, 0, it.z)); g.rotation.y = it.rot || 0;
+  rb(g, 0, 0, W2 + 0.02, 0.03, y0 - 0.01, y0 + H2 + 0.01, M.blackMetal, 0.006);
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.15 });
+  [1, -1].forEach(sd => { const p = new THREE.Mesh(new THREE.PlaneGeometry(W2, H2), mat); p.position.set(0, y0 + H2 / 2, sd * 0.0155); if (sd < 0) p.rotation.y = Math.PI; g.add(p); });
+  [-0.24, 0.24].forEach(x => cy(g, x, (y0 + H2 + ceil) / 2, 0, 0.005, ceil - y0 - H2, M.blackMetal, 6));
+  [-0.24, 0.24].forEach(x => cy(g, x, ceil - 0.01, 0, 0.03, 0.02, M.blackMetal, 12));
+}
+// Kitchen extract route, drawn to read clearly for the landlord:
+// canopy spigot → galvanised 500 × 300 duct along the soffit → fire-rated sleeve
+// through the rear wall → inline fan + attenuator on the rear elevation → 400 Ø
+// galvanised riser to a vertical discharge 1.0 m above the roof.
+function extractRoute(g, it) {
+  const gal = M.steelPlain, X = it.x, y0 = it.y0, y1 = it.y1, top = it.roofY + 1.0;
+  box(g, X - 0.25, X + 0.25, it.zStub - 0.2, it.zStub + 0.2, 2.56, y1, gal);                              // spigot riser off the hood
+  box(g, X - 0.25, X + 0.25, it.zStub - 0.2, it.zOut + 0.15, y0, y1, gal);                                // horizontal run under the soffit, through the wall
+  for (let z = it.zStub + 0.3; z < it.zOut; z += 0.6) box(g, X - 0.27, X + 0.27, z, z + 0.03, y0 - 0.02, y1 + 0.02, M.blackMetal);   // flange joints
+  box(g, X - 0.34, X + 0.34, it.zWall - 0.06, it.zWall + 0.06, y0 - 0.09, y1 + 0.09, M.cream);         // fire-rated sleeve/collar
+  [it.zStub + 0.1, (it.zStub + it.zWall) / 2].forEach(z => {                                            // drop-rod hangers to the soffit
+    [-0.27, 0.27].forEach(o => cy(g, X + o, (y1 + 3.6) / 2, -z, 0.006, 3.6 - y1, M.blackMetal, 6));
+    box(g, X - 0.3, X + 0.3, z - 0.02, z + 0.02, y0 - 0.04, y0, M.blackMetal);
+  });
+  // external: elbow up, inline fan + attenuator, round riser with wall brackets, discharge
+  const rz = it.zOut;
+  box(g, X - 0.3, X + 0.3, rz - 0.05, rz + 0.45, y0 - 0.05, y1 + 0.35, gal);                            // elbow box
+  box(g, X - 0.38, X + 0.38, rz - 0.13, rz + 0.53, y1 + 0.35, y1 + 1.05, M.blackMetal);                 // inline extract fan (acoustic box)
+  cy(g, X, y1 + 1.55, -(rz + 0.2), 0.24, 0.9, M.steelDark, 24);                                          // attenuator
+  cy(g, X, (y1 + 2.0 + top) / 2, -(rz + 0.2), 0.2, top - y1 - 2.0, gal, 24);                              // 400 Ø riser
+  for (let y = y1 + 2.4; y < top - 0.3; y += 1.5) box(g, X - 0.24, X + 0.24, rz - 0.17, rz + 0.02, y, y + 0.05, M.blackMetal);   // brackets fixed back to the rear elevation (face at z 6.40)
+  cy(g, X, top + 0.15, -(rz + 0.2), 0.215, 0.3, M.steelDark, 24);                                        // vertical discharge cone (no cowl)
+  const tag = (t, x, y, z) => label(`<b>${t}</b>`, x, y, z, 'zone duct');
+  tag('EXTRACT HOOD', X, 2.75, it.zStub - 0.6); tag('DUCT → OUTSIDE', X, y1 + 0.1, (it.zWall + it.zStub) / 2);
+  tag('INLINE FAN + ATTENUATOR', X, y1 + 0.9, rz + 0.3); tag('DISCHARGE 1 m ABOVE ROOF', X, top + 0.5, rz + 0.2);
+}
+// Enclosed wash-up: subway-tiled partitions up to the bulkhead with a flush red sliding
+// door, so the pot wash, racks and dirty dishes are out of customer view.
+function washEnclosure(g, it) {
+  const H = it.h, T = 0.06, tile = (w) => fitted(M.kitchenTile, w, H);
+  const { x0, x1, z0, zBack, door } = it;
+  box(g, x0, x0 + T, z0, zBack, 0, H, tile(zBack - z0));                                          // west partition
+  box(g, x0, door[0], z0, z0 + T, 0, H, tile(door[0] - x0));                                       // front, left of door
+  box(g, door[1], x1, z0, z0 + T, 0, H, tile(x1 - door[1]));                                       // front, right of door
+  box(g, door[0], door[1], z0, z0 + T, 2.1, H, tile(door[1] - door[0]));                           // door head
+  box(g, door[0] + 0.01, door[1] + 0.06, z0 - 0.035, z0 - 0.005, 0.02, 2.08, M.redSatin);           // flush sliding door leaf
+  box(g, door[0] - 0.02, door[1] + 0.1, z0 - 0.05, z0 - 0.035, 2.08, 2.12, M.blackMetal);           // top track
+  box(g, door[0] + 0.06, door[0] + 0.08, z0 - 0.06, z0 - 0.035, 0.9, 1.3, M.blackMetal);            // recessed pull
+  [[x0, z0, x0 + T, zBack], [x0, z0, x1, z0 + T]].forEach(b => colBoxes.push([b[0], b[2], b[1], b[3]]));
 }
 function counterSigns(it) {
   const signAt = (zoneKey, tex) => {
@@ -470,8 +630,10 @@ function setNight(on, silent) {
   scene.fog.color.set(on ? 0x0b0f18 : 0xd9dfe2);
   hemi.intensity = on ? 0.03 : 0.4; sun.intensity = on ? 0 : 2.4; sun.castShadow = !on;
   streetLamp.intensity = on ? 60 : 0;
+  canopyLights.forEach(l => { l.intensity = on ? 6 : 0; });
   interior.forEach(([l, i]) => { l.intensity = i * (on ? 1.35 : 1); });
   M.wordmark.emissiveIntensity = on ? 1.4 : 0.35;
+  M.fasciaLetters.emissiveIntensity = on ? 1.6 : 0.25;
   M.ledWarm.emissiveIntensity = on ? 3.2 : 2.2;
   renderer.toneMappingExposure = on ? 1.0 : 0.92;
   scene.traverse(o => { const m = o.material; if (m && !Array.isArray(m) && m.envMapIntensity !== undefined) { if (m.userData.baseEnv === undefined) m.userData.baseEnv = m.envMapIntensity; m.envMapIntensity = m.userData.baseEnv * (on ? 0.12 : 0.42); } });
@@ -531,6 +693,7 @@ let mode = 'walk', tween = null, tourIndex = 0;
 const keys = new Set();
 const el = labelRenderer.domElement;
 function setMode(m) {
+  if (m !== 'walk') stopFilm();
   mode = m; tween = null;
   document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
   orbit.enabled = m === 'orbit';
@@ -566,7 +729,7 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 const ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 let drag = null;
-el.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY }; if (mode === 'walk') { el.setPointerCapture(e.pointerId); tween = null; } });
+el.addEventListener('pointerdown', (e) => { stopFilm(); drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY }; if (mode === 'walk') { el.setPointerCapture(e.pointerId); tween = null; } });
 el.addEventListener('pointermove', (e) => {
   if (!drag || mode !== 'walk') return;
   const k = 0.0042 * (persp.fov / 68);
@@ -582,6 +745,7 @@ el.addEventListener('wheel', (e) => {
 window.addEventListener('keydown', (e) => {
   if (e.target.closest('input,select,textarea')) return;
   const k = e.key.toLowerCase();
+  if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift', 'q', 'e', 'n', 'p', 'escape'].includes(k)) stopFilm();
   if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift', 'q', 'e'].includes(k)) { keys.add(k); tween = null; if (k.startsWith('arrow')) e.preventDefault(); }
   if (k === 'n' || k === 'pagedown') goTour(tourIndex + 1);
   if (k === 'p' || k === 'pageup') goTour(tourIndex - 1);
@@ -631,6 +795,11 @@ function inspect(e) {
 }
 
 function step(dt, raw) {
+  if (filmPlay) {
+    const t = (performance.now() - filmPlay.start) / 1000;
+    if (t >= film.duration) stopFilm(); else applyFilmPose(t, true);
+    return;
+  }
   if (tween) {
     tween.t += raw / tween.dur; const t = ease(Math.min(1, tween.t));
     for (const k of ['x', 'z', 'yaw', 'pitch']) player[k] = tween.from[k] + (tween.to[k] - tween.from[k]) * t;
@@ -703,6 +872,63 @@ mm.addEventListener('click', (e) => {
   [player.x, player.z] = resolve(X, Z); tween = null;
 });
 
+// ------------------------------------------------------------------ landlord walkthrough film
+// One continuous camera path (layouts.js `film`) shared by the Play button and the
+// rendered MP4. The staff gate swings open as the camera passes through it.
+let film = null, filmPlay = null, gateLeaves = [];
+const FILM_FOV = 62;
+function prepareFilm() {
+  film = current.film ? buildFilm(current.film) : null;
+  gateLeaves = []; layout.traverse(o => { if (o.userData.gateLeaf) gateLeaves.push(o); });
+  const b = document.getElementById('film-play'); if (b) b.hidden = !film;
+}
+function gateFor(x, z) {
+  gateLeaves.forEach(g => {
+    const p = new THREE.Vector3(); g.getWorldPosition(p);
+    const d = Math.hypot(p.x - x, -p.z - z), open = 1 - Math.min(1, Math.max(0, (d - 0.9) / 0.9));
+    g.userData.gateLeaf.rotation.y = -1.45 * open * open * (3 - 2 * open);
+  });
+}
+function applyFilmPose(t, ui) {
+  const q = film.pose(t);
+  Object.assign(player, { x: q.x, z: q.z, yaw: q.yaw, pitch: q.pitch });
+  if (persp.fov !== FILM_FOV) { persp.fov = FILM_FOV; persp.updateProjectionMatrix(); }
+  applyWalkCamera(); gateFor(q.x, q.z);
+  if (ui && q.cap !== filmPlay.cap) {
+    filmPlay.cap = q.cap;
+    document.getElementById('tour-step').textContent = 'WALKTHROUGH';
+    document.getElementById('tour-title').textContent = q.cap;
+    document.getElementById('tour-desc').textContent = q.sub;
+    document.getElementById('tour-staff').hidden = true;
+  }
+  return q;
+}
+function playFilm() {
+  if (!film) return;
+  if (mode !== 'walk') setMode('walk');
+  tween = null; keys.clear(); filmPlay = { start: performance.now(), cap: null };
+  document.getElementById('film-play').textContent = '■ Stop walkthrough';
+}
+function stopFilm() {
+  if (!filmPlay) return;
+  filmPlay = null; persp.fov = 68; persp.updateProjectionMatrix(); gateFor(99, 99);
+  const b = document.getElementById('film-play'); if (b) b.textContent = '▶ Play walkthrough';
+}
+// cutaway: upper storeys drawn as a translucent ghost so the extract riser reads as fixed to the rear elevation
+const ghostMat = new THREE.MeshStandardMaterial({ color: 0xb9b0a0, transparent: true, opacity: 0.3, depthWrite: false, roughness: 0.9 });
+function setGhostUpper(on) {
+  if (on) ghostMat.opacity = typeof on === 'number' ? on : 0.3;
+  upper.traverse(o => { if (o.isMesh) { if (on) { if (!o.userData.realMat) o.userData.realMat = o.material; o.material = ghostMat; } else if (o.userData.realMat) o.material = o.userData.realMat; } });
+  upper.visible = on || mode === 'walk';
+}
+// headless renderer hook: exact frame at time t (used to render the MP4)
+function filmShot(t, quality = 0.92) {
+  if (!filmShot.frozen) { renderer.setAnimationLoop(null); renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true; filmShot.frozen = true; }   // static scene: shadow maps computed once
+  const q = applyFilmPose(t, false);
+  if (composer && state.hq) composer.render(); else renderer.render(scene, persp);
+  return { url: renderer.domElement.toDataURL('image/jpeg', quality), cap: q.cap, sub: q.sub, x: q.x, z: q.z };
+}
+
 // ------------------------------------------------------------------ resize + loop
 let planZoom = 1;
 function resize() {
@@ -721,7 +947,7 @@ function frame() {
   const t0 = performance.now();
   const raw = clock.getDelta();
   if (renderer.xr.isPresenting) {           // headset: controllers drive movement, no post / labels
-    xrStep(Math.min(0.05, raw));
+    vr.step(Math.min(0.05, raw));
     renderer.render(scene, persp);
     frameMs = performance.now() - t0;
     return;
@@ -735,91 +961,13 @@ function frame() {
   frameMs = performance.now() - t0;
 }
 
-// ------------------------------------------------------------------ VR (WebXR, Meta Quest browser)
-// The user's real head height is used (local-floor). A "dolly" carries the camera:
-// left stick walks (with the same collisions as desktop), right stick snap-turns 30°,
-// A / B = next / previous review view, X = night, Y = walk through objects.
-renderer.xr.enabled = true;
-renderer.xr.setReferenceSpaceType('local-floor');
-const dolly = new THREE.Group(); scene.add(dolly);
-const xrPad = { prev: {} }, _hp = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
-function headPlan() { persp.getWorldPosition(_hp); persp.getWorldQuaternion(_q); _e.setFromQuaternion(_q); return { x: _hp.x, z: -_hp.z, yaw: _e.y }; }
-function xrPlace(x, z, yaw) {             // put the viewer's head at plan (x, z) facing yaw
-  const h = headPlan();
-  dolly.rotation.y += yaw - h.yaw; dolly.updateMatrixWorld(true);
-  const h2 = headPlan();
-  dolly.position.x += x - h2.x; dolly.position.z += -(z - h2.z); dolly.position.y = floorAt(z);
-}
-// floating caption so the review view names are readable inside the headset
-const capCanvas = document.createElement('canvas'); capCanvas.width = 1024; capCanvas.height = 256;
-const capTex = new THREE.CanvasTexture(capCanvas); capTex.colorSpace = THREE.SRGBColorSpace;
-const caption = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.225), new THREE.MeshBasicMaterial({ map: capTex, transparent: true, depthTest: false }));
-caption.renderOrder = 10; caption.visible = false; scene.add(caption);
-let captionUntil = 0;
-function showCaption(title, sub) {
-  const g = capCanvas.getContext('2d'); g.clearRect(0, 0, 1024, 256);
-  g.fillStyle = 'rgba(20,22,24,0.86)'; g.beginPath(); g.roundRect(0, 0, 1024, 256, 28); g.fill();
-  g.fillStyle = '#cc1305'; g.fillRect(0, 0, 14, 256);
-  g.fillStyle = '#fff'; g.font = "600 64px Oswald, 'Arial Narrow', sans-serif"; g.fillText(title.toUpperCase(), 44, 100);
-  g.fillStyle = '#c9ccc9'; g.font = "400 34px Archivo, sans-serif";
-  const words = (sub || '').split(' '); let line = '', y = 160;
-  for (const w of words) { if (g.measureText(line + w).width > 930) { g.fillText(line, 44, y); line = ''; y += 44; if (y > 240) break; } line += w + ' '; }
-  if (y <= 240) g.fillText(line, 44, y);
-  capTex.needsUpdate = true;
-  const h = headPlan(); persp.getWorldPosition(_hp);
-  caption.position.set(_hp.x - Math.sin(h.yaw) * 1.4, _hp.y - 0.25, _hp.z - Math.cos(h.yaw) * 1.4);
-  caption.rotation.set(0, h.yaw, 0); caption.visible = true; captionUntil = performance.now() + 6000;
-}
-function xrTour(i) {
-  const stops = current.tour; tourIndex = (i + stops.length) % stops.length; const st = stops[tourIndex];
-  const [ex, ez] = resolve(st.eye[0], st.eye[1]);
-  xrPlace(ex, ez, Math.atan2(-(st.look[0] - ex), (st.look[2] - ez)));
-  showCaption(`${String(tourIndex + 1).padStart(2, '0')} · ${st.t}`, st.d);
-}
-function xrStep(dt) {
-  const session = renderer.xr.getSession(); if (!session) return;
-  let mx = 0, mz = 0, turn = 0; const pressed = {};
-  for (const src of session.inputSources) {
-    const gp = src.gamepad; if (!gp) continue;
-    const ax = gp.axes.length >= 4 ? [gp.axes[2], gp.axes[3]] : [gp.axes[0] || 0, gp.axes[1] || 0];
-    if (src.handedness === 'left') { mx = ax[0]; mz = ax[1]; }
-    else turn = ax[0];
-    const hand = src.handedness === 'left' ? 'L' : 'R';
-    [4, 5].forEach(b => { if (gp.buttons[b]?.pressed) pressed[hand + b] = true; });
-  }
-  const edge = (k) => pressed[k] && !xrPad.prev[k];
-  if (edge('R4')) xrTour(tourIndex + 1);
-  if (edge('R5')) xrTour(tourIndex - 1);
-  if (edge('L4')) setNight(!state.night);
-  if (edge('L5')) { state.free = !state.free; showCaption(state.free ? 'Walk through objects: ON' : 'Walk through objects: OFF', ''); }
-  xrPad.prev = pressed;
-  // snap turn
-  if (Math.abs(turn) > 0.7 && !xrPad.turned) { const h = headPlan(); xrPlace(h.x, h.z, h.yaw - Math.sign(turn) * Math.PI / 6); xrPad.turned = true; }
-  if (Math.abs(turn) < 0.3) xrPad.turned = false;
-  // smooth walk relative to where the head looks, same collision resolver as desktop
-  if (Math.hypot(mx, mz) > 0.15) {
-    const h = headPlan(), sp = 1.3 * dt;
-    const fx = -Math.sin(h.yaw), fz = Math.cos(h.yaw), rx = Math.cos(h.yaw), rz = Math.sin(h.yaw);
-    const nx = h.x + (fx * -mz + rx * mx) * sp, nz = h.z + (fz * -mz + rz * mx) * sp;
-    const [px, pz] = resolve(nx, nz);
-    dolly.position.x += px - h.x; dolly.position.z += -(pz - h.z); dolly.position.y = floorAt(pz);
-  }
-  if (caption.visible && performance.now() > captionUntil) caption.visible = false;
-  const t = performance.now() / 1000;
-  animated.forEach(s => { const k = ((t * 0.25 + s.userData.phase) % 1); s.position.y = s.userData.base + k * 0.5; s.material.opacity = 0.22 * (1 - k); });
-}
-renderer.xr.addEventListener('sessionstart', () => {
-  if (mode !== 'walk') setMode('walk');
-  camera = persp; dolly.add(persp); persp.position.set(0, 0, 0); persp.rotation.set(0, 0, 0);
-  dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0);
-  renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;   // static shadows: keeps Quest at frame rate
-  if (renderer.xr.setFoveation) renderer.xr.setFoveation(1);
-  document.body.dataset.xr = 'on';
-  setTimeout(() => xrTour(tourIndex), 300);
-});
-renderer.xr.addEventListener('sessionend', () => {
-  dolly.remove(persp); renderer.shadowMap.autoUpdate = true; caption.visible = false;
-  document.body.dataset.xr = ''; applyWalkCamera(); resize();
+// ------------------------------------------------------------------ VR (WebXR, Meta Quest browser) — see vr.js
+const vr = setupVR({
+  renderer, scene, persp, resolve, floorAt, state, sky: skyMesh, gateFor, setNight: (on) => setNight(on),
+  current: () => current, animated: () => animated, collision: () => ({ segs: colSegs, boxes: colBoxes }),
+  tourIndex: () => tourIndex, setTourIndex: (k) => { tourIndex = k; }, setOption: (id) => setOption(id),
+  enterWalk: () => { stopFilm(); if (mode !== 'walk') setMode('walk'); camera = persp; },
+  exitVR: () => { applyWalkCamera(); resize(); },
 });
 const vrBtn = document.getElementById('tg-vr');
 // The button is always visible; if this browser can't do VR it explains where to open it.
@@ -836,17 +984,15 @@ async function initVR() {
                  : `This browser has no VR headset. Open this link in the <b>Meta Quest Browser</b> (inside the headset):<br><b>${VR_LINK}</b>`);
       return;
     }
-    try {
-      const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor'] });
-      await renderer.xr.setSession(session);
-    } catch (e) { say(`VR was blocked (${e.name}). Open in the Meta Quest Browser:<br><b>${VR_LINK}</b>`); console.warn(e); }
+    try { await vr.start(); }
+    catch (e) { say(`VR was blocked (${e.name}). Open in the Meta Quest Browser:<br><b>${VR_LINK}</b>`); console.warn(e); }
   });
 }
 initVR();
 
 // ------------------------------------------------------------------ UI wiring
 function setOption(id) {
-  buildOption(id);
+  stopFilm(); buildOption(id); prepareFilm();
   document.querySelectorAll('[data-option]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.option === id)));
   document.getElementById('opt-summary').textContent = current.summary;
   document.getElementById('opt-journey').textContent = current.journey;
@@ -863,15 +1009,16 @@ document.querySelectorAll('[data-toggle]').forEach(b => b.addEventListener('clic
   if (k === 'night') setNight(state.night); else if (k === 'free') { if (!state.free) [player.x, player.z] = resolve(player.x, player.z); } else refreshVisibility();
 }));
 document.getElementById('tg-hq').setAttribute('aria-pressed', String(state.hq));
-document.getElementById('tour-prev').addEventListener('click', () => goTour(tourIndex - 1));
-document.getElementById('tour-next').addEventListener('click', () => goTour(tourIndex + 1));
+document.getElementById('film-play').addEventListener('click', () => (filmPlay ? stopFilm() : playFilm()));
+document.getElementById('tour-prev').addEventListener('click', () => { stopFilm(); goTour(tourIndex - 1); });
+document.getElementById('tour-next').addEventListener('click', () => { stopFilm(); goTour(tourIndex + 1); });
 document.getElementById('inspect-close').addEventListener('click', () => { document.getElementById('inspect').hidden = true; });
 
-let startOpt = 'A';
-try { startOpt = localStorage.getItem('bigoli-option') || 'A'; } catch (e) { /* storage unavailable */ }
+let startOpt = 'B2';   // the proposed design opens first; A / B stay one click away
+try { startOpt = localStorage.getItem('bigoli-option') || 'B2'; } catch (e) { /* storage unavailable */ }
 const hash = location.hash.replace('#', '').toUpperCase();
 if (OPTIONS[hash]) startOpt = hash;
-if (!OPTIONS[startOpt]) startOpt = 'A';
+if (!OPTIONS[startOpt]) startOpt = 'B2';
 resize();
 setOption(startOpt);
 { const s = current.tour[0]; player.x = s.eye[0]; player.z = s.eye[1]; Object.assign(player, lookAtPlan(s.eye[0], s.eye[1], ...s.look)); }
@@ -880,4 +1027,4 @@ setupComposer();
 renderer.setAnimationLoop(frame);
 
 // automation hook (used to export review stills)
-window.bigoli = { xrTest: { dolly, headPlan, xrPlace, persp, resolve }, walkInto, get frameMs() { return frameMs; }, setOption, setMode, goTour, setNight, state, refreshVisibility, player, orbitTo: (p, t) => { persp.position.set(...p); orbit.target.set(...t); orbit.update(); } };
+window.bigoli = { canvas: renderer.domElement, renderInfo: () => ({ ...renderer.info.render, programs: renderer.info.programs.length, presenting: renderer.xr.isPresenting }), renderNow: (q = 0.92) => { renderer.setAnimationLoop(null); refreshVisibility(); renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', q); }, film: { get duration() { return film ? film.duration : 0; }, pose: (t) => film.pose(t), shot: filmShot, play: playFilm, shotOrbit: (pos, target, fov = 40, ghost = 0.3) => { renderer.setAnimationLoop(null); if (mode !== 'orbit') setMode('orbit'); persp.fov = fov; persp.updateProjectionMatrix(); persp.position.set(...pos); persp.lookAt(...target); setGhostUpper(ghost); renderer.render(scene, persp); setGhostUpper(false); return renderer.domElement.toDataURL('image/jpeg', 0.92); }, shotAt: (x, z, look) => { renderer.setAnimationLoop(null); Object.assign(player, { x, z }, lookAtPlan(x, z, ...look)); persp.fov = FILM_FOV; persp.updateProjectionMatrix(); applyWalkCamera(); if (composer && state.hq) composer.render(); else renderer.render(scene, persp); return renderer.domElement.toDataURL('image/jpeg', 0.9); } }, xrTest: { ...vr.test, persp, resolve }, groups: { upper, context, ceilings }, walkInto, get frameMs() { return frameMs; }, setOption, setMode, goTour, setNight, state, refreshVisibility, player, orbitTo: (p, t) => { persp.position.set(...p); orbit.target.set(...t); orbit.update(); } };

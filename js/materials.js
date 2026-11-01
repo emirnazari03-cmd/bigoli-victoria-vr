@@ -90,6 +90,42 @@ function tiles(colA, colB, count = 8, pattern = 'check', grout = '#cfcac0') {
     },
   });
 }
+// Small-format white subway tile (150 × 75, brick bond, white grout) — the
+// "white tiled wall" from the existing Bigoli store (assets/Bigoli file.pdf, p.5).
+function subway(col = '#f6f5f1', grout = '#ecebe6', cols = 4, rows = 8) {
+  return surface({
+    n: 512, normal: 3, rough: '#262626',
+    draw(g, h, r, s) {
+      const tw = s / cols, th = s / rows, gw = 2;
+      g.fillStyle = grout; g.fillRect(0, 0, s, s);
+      h.fillStyle = '#404040'; h.fillRect(0, 0, s, s);
+      r.fillStyle = '#c8c8c8'; r.fillRect(0, 0, s, s);
+      for (let j = 0; j < rows; j++) for (let i = -1; i < cols; i++) {
+        const x = i * tw + (j % 2 ? tw / 2 : 0) + gw, y = j * th + gw, w = tw - gw * 2, hh = th - gw * 2;
+        const base = new THREE.Color(col); base.offsetHSL(0, 0, (rnd() - 0.5) * 0.025);
+        const grd = g.createLinearGradient(x, y, x, y + hh);
+        grd.addColorStop(0, '#' + base.clone().offsetHSL(0, 0, 0.02).getHexString()); grd.addColorStop(1, '#' + base.clone().offsetHSL(0, 0, -0.025).getHexString());
+        g.fillStyle = grd; g.fillRect(x, y, w, hh);
+        h.fillStyle = '#9a9a9a'; h.fillRect(x, y, w, hh);
+        h.fillStyle = '#a6a6a6'; h.fillRect(x + 3, y + 3, w - 6, hh - 6); // bevelled glaze edge
+        r.fillStyle = `rgb(${18 + rnd() * 12 | 0},${18 + rnd() * 12 | 0},${18 + rnd() * 12 | 0})`; r.fillRect(x, y, w, hh);
+      }
+    },
+  });
+}
+// Italian green/white check canopy fabric (solution-dyed acrylic). Texture = 2 × 2
+// squares of 250 mm, so repeat = size / 0.5 m.
+function checkFabric(a = '#2f6a45', b = '#f7f6f1') {
+  return surface({
+    n: 256, normal: 0.8, rough: '#d0d0d0',
+    draw(g, h, r, s) {
+      const t = s / 2;
+      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? b : a; g.fillRect(i * t, j * t, t, t); }
+      for (let i = 0; i < 2600; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},0.05)`; g.fillRect(rnd() * s, rnd() * s, 1, 1 + rnd() * 3); }   // weave
+      for (let y = 0; y < s; y += 2) { h.fillStyle = y % 4 ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'; h.fillRect(0, y, s, 1); }
+    },
+  });
+}
 function plaster() {
   return surface({
     n: 512, normal: 1.4, rough: '#e0e0e0',
@@ -228,10 +264,11 @@ export function buildMaterials(loadTex) {
   const floor = terrazzo('#557d61', ['#e8e2d2', '#27402f', '#a9c0aa', '#d6ccb6', '#6f957a', '#1c2e23', '#bfae8e']);
   const stone = terrazzo('#e9e4d8', ['#cc1305', '#376a4a', '#b7ad98', '#8c8676', '#f7f4ec'], 512, false);
   const seatTerrazzo = terrazzo('#557d61', ['#e8e2d2', '#27402f', '#a9c0aa', '#d6ccb6', '#6f957a'], 512, false);
-  const kitchenTile = tiles('#f3f2ee', null, 8, 'none', '#d8d6d0');
+  const kitchenTile = subway();
   const diningTile = tiles('#e2ddc9', '#376a4a', 6, 'check', '#cfc9b6');
   const redTile = tiles('#c8150a', null, 6, 'none', '#9d1208');
   const greenTile = tiles('#376a4a', null, 6, 'none', '#2b523a');
+  const check = checkFabric();
   const pl = plaster(), st = brushed(), stDark = brushed('#7c8286'), wood = oak(), br = brick(), pv = paving();
   const fabric = noiseSurface('#b8140a', 0.25, 256, 1.5);
   const foc = focacciaTop(), cr = crumb();
@@ -244,6 +281,8 @@ export function buildMaterials(loadTex) {
     redTile: std({ ...redTile, roughness: 1, envMapIntensity: 1 }),
     greenTile: std({ ...greenTile, roughness: 1, envMapIntensity: 1 }),
     plaster: std({ ...pl, roughness: 1 }),
+    canopyCheck: std({ ...check, roughness: 0.85, envMapIntensity: 0.6 }),
+    greenPlastic: std({ color: 0x2f6a45, roughness: 0.38, envMapIntensity: 0.9 }),
     ceiling: std({ color: 0xf0eeea, roughness: 0.95 }),
     soffit: std({ color: 0xe9e7e2, roughness: 0.95 }),
     steel: std({ ...st, color: 0xffffff, metalness: 1, roughness: 1, envMapIntensity: 1.1 }),
@@ -265,6 +304,7 @@ export function buildMaterials(loadTex) {
     oak: std({ ...wood, roughness: 1, envMapIntensity: 0.7 }),
     fabric: std({ ...fabric, roughness: 0.9 }),
     glass: phys({ color: 0xeef5f6, metalness: 0, roughness: 0.04, transparent: true, opacity: 0.07, envMapIntensity: 0.45, depthWrite: false, side: THREE.DoubleSide }),
+    guardGlass: phys({ color: 0xcfe3e0, metalness: 0, roughness: 0.03, transparent: true, opacity: 0.26, envMapIntensity: 0.8, depthWrite: false, side: THREE.DoubleSide }),
     glassTint: phys({ color: 0xd9e6e8, metalness: 0, roughness: 0.04, transparent: true, opacity: 0.12, envMapIntensity: 0.5, depthWrite: false, side: THREE.DoubleSide }),
     perspex: phys({ color: 0xffffff, roughness: 0.05, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }),
     water: phys({ color: 0x9cb9c0, roughness: 0.06, transparent: true, opacity: 0.82, envMapIntensity: 1.2 }),
@@ -297,9 +337,9 @@ export function buildMaterials(loadTex) {
   };
   // tiling scales (texture sizes in metres)
   M.floor.userData.tile = 1.2; M.paving.userData.tile = 1.2; M.brick.userData.tile = 0.9;
-  M.kitchenTile.userData.tile = 0.8; M.diningTile.userData.tile = 0.9; M.redTile.userData.tile = 0.6; M.greenTile.userData.tile = 0.6;
+  M.kitchenTile.userData.tile = 0.6; M.diningTile.userData.tile = 0.9; M.redTile.userData.tile = 0.6; M.greenTile.userData.tile = 0.6;
   M.plaster.userData.tile = 1.6; M.oak.userData.tile = 1.2; M.stone.userData.tile = 0.8; M.seatTerrazzo.userData.tile = 0.8;
-  M.steel.userData.tile = 1.0;
+  M.steel.userData.tile = 1.0; M.canopyCheck.userData.tile = 0.5;
   return M;
 }
 
